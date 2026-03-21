@@ -72,7 +72,7 @@ func (q *Queries) DeleteCourse(ctx context.Context, id int64) error {
 	return err
 }
 
-const getCourse = `-- name: GetCourse :one
+const getCourseByID = `-- name: GetCourseByID :one
 SELECT
     id,
     title,
@@ -86,8 +86,8 @@ FROM courses
 WHERE id = $1
 `
 
-func (q *Queries) GetCourse(ctx context.Context, id int64) (Course, error) {
-	row := q.db.QueryRow(ctx, getCourse, id)
+func (q *Queries) GetCourseByID(ctx context.Context, id int64) (Course, error) {
+	row := q.db.QueryRow(ctx, getCourseByID, id)
 	var i Course
 	err := row.Scan(
 		&i.ID,
@@ -98,6 +98,26 @@ func (q *Queries) GetCourse(ctx context.Context, id int64) (Course, error) {
 		&i.Capacity,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, username, password, created_at, updated_at, flag
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Flag,
 	)
 	return i, err
 }

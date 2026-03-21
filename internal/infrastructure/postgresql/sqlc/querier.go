@@ -11,7 +11,8 @@ import (
 type Querier interface {
 	CreateCourse(ctx context.Context, arg CreateCourseParams) (Course, error)
 	DeleteCourse(ctx context.Context, id int64) error
-	GetCourse(ctx context.Context, id int64) (Course, error)
+	GetCourseByID(ctx context.Context, id int64) (Course, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
 	UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Course, error)
 }
 

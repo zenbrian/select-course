@@ -32,6 +32,7 @@ type User struct {
 	Password  string           `json:"password"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+	Flag      int32            `json:"flag"`
 }
 
 type UserCourse struct {

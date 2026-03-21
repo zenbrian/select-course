@@ -18,7 +18,7 @@ RETURNING
     created_at,
     updated_at;
 
--- name: GetCourse :one
+-- name: GetCourseByID :one
 SELECT
     id,
     title,
@@ -53,4 +53,9 @@ RETURNING
 
 -- name: DeleteCourse :exec
 DELETE FROM courses
+WHERE id = $1;
+
+-- name: GetUserByID :one
+SELECT id, username, password, created_at, updated_at, flag
+FROM users
 WHERE id = $1;
