@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/jackc/pgx/v5"
+	"github.com/zenbrian/select-course/internal/course"
+	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
 )
 
 // mount
@@ -30,7 +32,9 @@ func (app *application) mount() http.Handler {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
-
+	OrderService := course.NewService(repo.New(app.db), app.db)
+	OrderHandler := course.NewHandler(OrderService)
+	r.Get("/course/{id}", OrderHandler.GetCourse)
 	return r
 }
 
