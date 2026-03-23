@@ -51,6 +51,22 @@ RETURNING
     created_at,
     updated_at;
 
+-- name: UpdateCourseCapacity :one
+UPDATE courses
+SET
+    capacity = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at;
+
 -- name: DeleteCourse :exec
 DELETE FROM courses
 WHERE id = $1;
@@ -58,4 +74,14 @@ WHERE id = $1;
 -- name: GetUserByID :one
 SELECT id, username, password, created_at, updated_at, flag
 FROM users
+WHERE id = $1;
+
+-- name: CreateUserCourse :exec
+INSERT INTO user_courses (user_id, course_id)
+VALUES ($1, $2);
+
+-- name: UpdateUserFlag :exec
+UPDATE users
+SET flag = $2,
+    updated_at = NOW()
 WHERE id = $1;

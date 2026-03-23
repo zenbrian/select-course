@@ -62,6 +62,21 @@ func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (Cou
 	return i, err
 }
 
+const createUserCourse = `-- name: CreateUserCourse :exec
+INSERT INTO user_courses (user_id, course_id)
+VALUES ($1, $2)
+`
+
+type CreateUserCourseParams struct {
+	UserID   int64 `json:"user_id"`
+	CourseID int64 `json:"course_id"`
+}
+
+func (q *Queries) CreateUserCourse(ctx context.Context, arg CreateUserCourseParams) error {
+	_, err := q.db.Exec(ctx, createUserCourse, arg.UserID, arg.CourseID)
+	return err
+}
+
 const deleteCourse = `-- name: DeleteCourse :exec
 DELETE FROM courses
 WHERE id = $1
@@ -173,4 +188,59 @@ func (q *Queries) UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Cou
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateCourseCapacity = `-- name: UpdateCourseCapacity :one
+UPDATE courses
+SET
+    capacity = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+`
+
+type UpdateCourseCapacityParams struct {
+	ID       int64 `json:"id"`
+	Capacity int32 `json:"capacity"`
+}
+
+func (q *Queries) UpdateCourseCapacity(ctx context.Context, arg UpdateCourseCapacityParams) (Course, error) {
+	row := q.db.QueryRow(ctx, updateCourseCapacity, arg.ID, arg.Capacity)
+	var i Course
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.CategoryID,
+		&i.Week,
+		&i.Duration,
+		&i.Capacity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserFlag = `-- name: UpdateUserFlag :exec
+UPDATE users
+SET flag = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateUserFlagParams struct {
+	ID   int64 `json:"id"`
+	Flag int32 `json:"flag"`
+}
+
+func (q *Queries) UpdateUserFlag(ctx context.Context, arg UpdateUserFlagParams) error {
+	_, err := q.db.Exec(ctx, updateUserFlag, arg.ID, arg.Flag)
+	return err
 }
