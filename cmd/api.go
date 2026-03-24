@@ -34,8 +34,9 @@ func (app *application) mount() http.Handler {
 	})
 	OrderService := course.NewService(repo.New(app.db), app.db)
 	OrderHandler := course.NewHandler(OrderService)
-	r.Get("/course/{id}", OrderHandler.GetCourse)
-	r.Post("/course/select", OrderHandler.SelectCourse)
+	r.Get("/courses/{id}", OrderHandler.GetCourse)
+	r.Post("/courses/select", OrderHandler.SelectCourse)
+	r.Post("/courses/back-course", OrderHandler.BackCourse)
 	return r
 }
 

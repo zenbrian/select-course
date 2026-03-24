@@ -52,7 +52,22 @@ func (h *handler) SelectCourse(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
+}
+func (h *handler) BackCourse(w http.ResponseWriter, r *http.Request) {
+	var body repo.DeleteUserCourseParams
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+	if course, err := h.service.BackCourse(r.Context(), body.CourseID, body.UserID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		if err := json.NewEncoder(w).Encode(course); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 // func (h *handler) CreateCourse(w http.ResponseWriter, r *http.Request) {}

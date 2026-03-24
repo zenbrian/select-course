@@ -85,3 +85,7 @@ UPDATE users
 SET flag = $2,
     updated_at = NOW()
 WHERE id = $1;
+
+-- name: DeleteUserCourse :execrows
+DELETE FROM user_courses
+WHERE user_id = $1 AND course_id = $2;

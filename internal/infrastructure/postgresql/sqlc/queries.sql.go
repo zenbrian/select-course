@@ -87,6 +87,24 @@ func (q *Queries) DeleteCourse(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteUserCourse = `-- name: DeleteUserCourse :execrows
+DELETE FROM user_courses
+WHERE user_id = $1 AND course_id = $2
+`
+
+type DeleteUserCourseParams struct {
+	UserID   int64 `json:"user_id"`
+	CourseID int64 `json:"course_id"`
+}
+
+func (q *Queries) DeleteUserCourse(ctx context.Context, arg DeleteUserCourseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserCourse, arg.UserID, arg.CourseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCourseByID = `-- name: GetCourseByID :one
 SELECT
     id,

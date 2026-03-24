@@ -15,6 +15,7 @@ import (
 type Service interface {
 	GetCourseByID(ctx context.Context, id int64) (repo.Course, error)
 	SelectCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
+	BackCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
 }
 
 type svc struct {
@@ -69,6 +70,8 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 		return repo.Course{}, errors.New("invalid course week")
 	}
 
+	// 4. 用 testBit 檢查時間衝突
+
 	durationSlot, err := strconv.Atoi(course.Duration)
 	if err != nil {
 		return repo.Course{}, fmt.Errorf("invalid course duration: %w", err)
@@ -79,7 +82,6 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 		return repo.Course{}, errors.New("invalid course time slot")
 	}
 
-	// 4. 用 testBit 檢查時間衝突
 	occupied, err := testBit(user.Flag, offset)
 	if err != nil {
 		return repo.Course{}, err
@@ -130,6 +132,77 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 	}
 
 	return courseUpdated, nil
+}
+
+func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (repo.Course, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return repo.Course{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	// 1. 鎖課程
+	course, err := qtx.GetCourseByID(ctx, courseID)
+	if err != nil {
+		return repo.Course{}, err
+	}
+
+	// 2. 鎖 user
+	user, err := qtx.GetUserByID(ctx, userID)
+	if err != nil {
+		return repo.Course{}, err
+	}
+	// 3. 刪除選課紀錄
+	rows, err := qtx.DeleteUserCourse(ctx, repo.DeleteUserCourseParams{
+		UserID:   user.ID,
+		CourseID: course.ID,
+	})
+	if err != nil {
+		return repo.Course{}, err
+	}
+
+	if rows == 0 {
+		return repo.Course{}, errors.New("course not selected")
+	}
+
+	//更新課程容量+1
+	courseUpdated, err := qtx.UpdateCourseCapacity(ctx, repo.UpdateCourseCapacityParams{
+		ID:       course.ID,
+		Capacity: course.Capacity + 1,
+	})
+	if err != nil {
+		return repo.Course{}, err
+	}
+	durationSlot, err := strconv.Atoi(course.Duration)
+	if err != nil {
+		return repo.Course{}, fmt.Errorf("invalid course duration: %w", err)
+	}
+
+	offset := int(course.Week.Int32)*3 + durationSlot
+	if offset < 0 || offset >= maxSlots {
+		return repo.Course{}, errors.New("invalid course time slot")
+	}
+	// 用 clearBit 更新 user flag
+	newFlag, err := clearBit(user.Flag, offset)
+	if err != nil {
+		return repo.Course{}, err
+	}
+	err = qtx.UpdateUserFlag(ctx, repo.UpdateUserFlagParams{
+		ID:   user.ID,
+		Flag: newFlag,
+	})
+	if err != nil {
+		return repo.Course{}, fmt.Errorf("failed to update user flag: %w", err)
+	}
+	// 6. commit
+	if err := tx.Commit(ctx); err != nil {
+		return repo.Course{}, err
+	}
+	//更新用戶選課紀錄()
+	return courseUpdated, nil
+
 }
 
 func setBit(flag int32, slot int) (int32, error) {
