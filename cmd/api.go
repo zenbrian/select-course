@@ -7,9 +7,10 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zenbrian/select-course/internal/course"
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
+	redisinfra "github.com/zenbrian/select-course/internal/infrastructure/redis"
 )
 
 // mount
@@ -57,14 +58,26 @@ func (app *application) run(h http.Handler) error {
 type application struct {
 	config config
 	//loger
-	db *pgx.Conn
+	db    *pgxpool.Pool
+	redis *redisinfra.Client
 }
 
 type config struct {
-	addr string
-	db   dbconfig
+	addr  string
+	db    dbconfig
+	redis redisconfig
 }
 
 type dbconfig struct {
 	dsn string //user= pass= dbname= sslmode=
+}
+
+type redisconfig struct {
+	enabled      bool
+	addr         string
+	password     string
+	db           int
+	dialTimeout  time.Duration
+	readTimeout  time.Duration
+	writeTimeout time.Duration
 }

@@ -2,10 +2,13 @@ package course
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi"
+	"github.com/jackc/pgx/v5"
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
 )
 
@@ -43,8 +46,14 @@ func (h *handler) SelectCourse(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
+	if body.UserID <= 0 || body.CourseID <= 0 {
+		http.Error(w, "user_id and course_id must be > 0", http.StatusBadRequest)
+		return
+	}
 	if course, err := h.service.SelectCourse(r.Context(), body.CourseID, body.UserID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		status, msg := mapCourseError(err)
+		logCourseError("select", body.UserID, body.CourseID, err, status)
+		http.Error(w, msg, status)
 		return
 	} else {
 		if err := json.NewEncoder(w).Encode(course); err != nil {
@@ -59,8 +68,14 @@ func (h *handler) BackCourse(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
+	if body.UserID <= 0 || body.CourseID <= 0 {
+		http.Error(w, "user_id and course_id must be > 0", http.StatusBadRequest)
+		return
+	}
 	if course, err := h.service.BackCourse(r.Context(), body.CourseID, body.UserID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		status, msg := mapCourseError(err)
+		logCourseError("back", body.UserID, body.CourseID, err, status)
+		http.Error(w, msg, status)
 		return
 	} else {
 		if err := json.NewEncoder(w).Encode(course); err != nil {
@@ -68,6 +83,31 @@ func (h *handler) BackCourse(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func mapCourseError(err error) (int, string) {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return http.StatusNotFound, "user or course not found"
+	case errors.Is(err, ErrCourseFull),
+		errors.Is(err, ErrTimeConflict),
+		errors.Is(err, ErrAlreadySelected),
+		errors.Is(err, ErrNotSelected),
+		errors.Is(err, ErrInvalidCourseWeek),
+		errors.Is(err, ErrInvalidTimeSlot):
+		return http.StatusBadRequest, err.Error()
+	default:
+		return http.StatusInternalServerError, "internal server error"
+	}
+}
+
+func logCourseError(action string, userID int64, courseID int64, err error, status int) {
+	if status >= 500 {
+		slog.Error("course operation failed", "action", action, "user_id", userID, "course_id", courseID, "status", status, "error", err)
+		return
+	}
+
+	slog.Warn("course operation rejected", "action", action, "user_id", userID, "course_id", courseID, "status", status, "error", err)
 }
 
 // func (h *handler) CreateCourse(w http.ResponseWriter, r *http.Request) {}

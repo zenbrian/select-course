@@ -155,6 +155,73 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const incrementCapacity = `-- name: IncrementCapacity :one
+UPDATE courses
+SET
+    capacity = capacity + 1,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+`
+
+func (q *Queries) IncrementCapacity(ctx context.Context, id int64) (Course, error) {
+	row := q.db.QueryRow(ctx, incrementCapacity, id)
+	var i Course
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.CategoryID,
+		&i.Week,
+		&i.Duration,
+		&i.Capacity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const tryDecrementCapacity = `-- name: TryDecrementCapacity :one
+UPDATE courses
+SET
+    capacity = capacity - 1,
+    updated_at = NOW()
+WHERE id = $1
+  AND capacity > 0
+RETURNING
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+`
+
+func (q *Queries) TryDecrementCapacity(ctx context.Context, id int64) (Course, error) {
+	row := q.db.QueryRow(ctx, tryDecrementCapacity, id)
+	var i Course
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.CategoryID,
+		&i.Week,
+		&i.Duration,
+		&i.Capacity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateCourse = `-- name: UpdateCourse :one
 UPDATE courses
 SET
@@ -194,44 +261,6 @@ func (q *Queries) UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Cou
 		arg.Duration,
 		arg.Capacity,
 	)
-	var i Course
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.CategoryID,
-		&i.Week,
-		&i.Duration,
-		&i.Capacity,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateCourseCapacity = `-- name: UpdateCourseCapacity :one
-UPDATE courses
-SET
-    capacity = $2,
-    updated_at = NOW()
-WHERE id = $1
-RETURNING
-    id,
-    title,
-    category_id,
-    week,
-    duration,
-    capacity,
-    created_at,
-    updated_at
-`
-
-type UpdateCourseCapacityParams struct {
-	ID       int64 `json:"id"`
-	Capacity int32 `json:"capacity"`
-}
-
-func (q *Queries) UpdateCourseCapacity(ctx context.Context, arg UpdateCourseCapacityParams) (Course, error) {
-	row := q.db.QueryRow(ctx, updateCourseCapacity, arg.ID, arg.Capacity)
 	var i Course
 	err := row.Scan(
 		&i.ID,

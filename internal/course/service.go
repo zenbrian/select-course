@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
 )
@@ -20,12 +21,21 @@ type Service interface {
 
 type svc struct {
 	repo *repo.Queries
-	db   *pgx.Conn
+	db   *pgxpool.Pool
 }
 
 const maxSlots = 32
 
-func NewService(repo *repo.Queries, db *pgx.Conn) Service {
+var (
+	ErrCourseFull        = errors.New("course is full")
+	ErrInvalidCourseWeek = errors.New("invalid course week")
+	ErrInvalidTimeSlot   = errors.New("invalid course time slot")
+	ErrTimeConflict      = errors.New("time conflict")
+	ErrAlreadySelected   = errors.New("course already selected")
+	ErrNotSelected       = errors.New("course not selected")
+)
+
+func NewService(repo *repo.Queries, db *pgxpool.Pool) Service {
 	return &svc{
 		repo: repo,
 		db:   db,
@@ -57,7 +67,7 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 	}
 
 	if course.Capacity <= 0 {
-		return repo.Course{}, errors.New("course is full")
+		return repo.Course{}, ErrCourseFull
 	}
 
 	// 3. 鎖 user（避免 flag race）
@@ -67,7 +77,7 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 	}
 
 	if !course.Week.Valid {
-		return repo.Course{}, errors.New("invalid course week")
+		return repo.Course{}, ErrInvalidCourseWeek
 	}
 
 	// 4. 用 testBit 檢查時間衝突
@@ -79,7 +89,7 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 
 	offset := int(course.Week.Int32)*3 + durationSlot
 	if offset < 0 || offset >= maxSlots {
-		return repo.Course{}, errors.New("invalid course time slot")
+		return repo.Course{}, ErrInvalidTimeSlot
 	}
 
 	occupied, err := testBit(user.Flag, offset)
@@ -87,16 +97,16 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 		return repo.Course{}, err
 	}
 	if occupied {
-		return repo.Course{}, errors.New("time conflict")
+		return repo.Course{}, ErrTimeConflict
 	}
 
-	// 5. 扣減課程容量
-	courseUpdated, err := qtx.UpdateCourseCapacity(ctx, repo.UpdateCourseCapacityParams{
-		ID:       course.ID,
-		Capacity: course.Capacity - 1,
-	})
+	// 5. 原子扣減課程容量，避免併發下遺失更新
+	courseUpdated, err := qtx.TryDecrementCapacity(ctx, course.ID)
 	if err != nil {
-		return repo.Course{}, fmt.Errorf("failed to update course capacity: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return repo.Course{}, ErrCourseFull
+		}
+		return repo.Course{}, fmt.Errorf("failed to try decrement course capacity: %w", err)
 	}
 
 	// 6. 建立選課紀錄（處理重複選課）
@@ -107,7 +117,7 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 	if err != nil {
 		// duplicate key
 		if strings.Contains(err.Error(), "duplicate key") {
-			return repo.Course{}, errors.New("course already selected")
+			return repo.Course{}, ErrAlreadySelected
 		}
 		return repo.Course{}, fmt.Errorf("failed to create user course: %w", err)
 	}
@@ -164,16 +174,13 @@ func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (rep
 	}
 
 	if rows == 0 {
-		return repo.Course{}, errors.New("course not selected")
+		return repo.Course{}, ErrNotSelected
 	}
 
-	//更新課程容量+1
-	courseUpdated, err := qtx.UpdateCourseCapacity(ctx, repo.UpdateCourseCapacityParams{
-		ID:       course.ID,
-		Capacity: course.Capacity + 1,
-	})
+	// 原子回補課程容量，避免併發下遺失更新
+	courseUpdated, err := qtx.IncrementCapacity(ctx, course.ID)
 	if err != nil {
-		return repo.Course{}, err
+		return repo.Course{}, fmt.Errorf("failed to increment course capacity: %w", err)
 	}
 	durationSlot, err := strconv.Atoi(course.Duration)
 	if err != nil {
@@ -182,7 +189,7 @@ func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (rep
 
 	offset := int(course.Week.Int32)*3 + durationSlot
 	if offset < 0 || offset >= maxSlots {
-		return repo.Course{}, errors.New("invalid course time slot")
+		return repo.Course{}, ErrInvalidTimeSlot
 	}
 	// 用 clearBit 更新 user flag
 	newFlag, err := clearBit(user.Flag, offset)

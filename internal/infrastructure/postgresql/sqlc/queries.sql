@@ -51,10 +51,27 @@ RETURNING
     created_at,
     updated_at;
 
--- name: UpdateCourseCapacity :one
+-- name: TryDecrementCapacity :one
 UPDATE courses
 SET
-    capacity = $2,
+    capacity = capacity - 1,
+    updated_at = NOW()
+WHERE id = $1
+  AND capacity > 0
+RETURNING
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at;
+
+-- name: IncrementCapacity :one
+UPDATE courses
+SET
+    capacity = capacity + 1,
     updated_at = NOW()
 WHERE id = $1
 RETURNING
