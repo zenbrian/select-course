@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -33,7 +34,13 @@ func (app *application) mount() http.Handler {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
-	OrderService := course.NewService(repo.New(app.db), app.db)
+	OrderService := course.NewService(repo.New(app.db), app.db, app.redis)
+
+	// 在啟動服務之前，先執行預熱
+	if err := OrderService.PreheatCoursesToRedis(context.Background()); err != nil {
+		log.Fatalf("failed to preheat courses to redis: %v", err)
+	}
+
 	OrderHandler := course.NewHandler(OrderService)
 	r.Get("/courses/{id}", OrderHandler.GetCourse)
 	r.Post("/courses/select", OrderHandler.SelectCourse)

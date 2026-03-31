@@ -188,6 +188,48 @@ func (q *Queries) IncrementCapacity(ctx context.Context, id int64) (Course, erro
 	return i, err
 }
 
+const listCourses = `-- name: ListCourses :many
+SELECT
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+FROM courses
+`
+
+func (q *Queries) ListCourses(ctx context.Context) ([]Course, error) {
+	rows, err := q.db.Query(ctx, listCourses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Course
+	for rows.Next() {
+		var i Course
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.CategoryID,
+			&i.Week,
+			&i.Duration,
+			&i.Capacity,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const tryDecrementCapacity = `-- name: TryDecrementCapacity :one
 UPDATE courses
 SET

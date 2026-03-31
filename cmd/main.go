@@ -63,13 +63,6 @@ func main() {
 		defer redisClient.Close()
 		logger.Info("connected to redis successfully", "addr", cfg.redis.addr, "db", cfg.redis.db)
 
-		startupCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
-		if err := redisClient.Set(startupCtx, "server:startup", "booted", time.Minute); err != nil {
-			logger.Warn("failed to set redis startup key", "error", err)
-		} else {
-			logger.Info("redis startup key set", "key", "server:startup", "ttl", "1m")
-		}
 	} else {
 		logger.Info("redis is disabled via config")
 	}

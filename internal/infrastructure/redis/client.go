@@ -23,6 +23,10 @@ type Client struct {
 	client *goredis.Client
 }
 
+func (c *Client) Pipeline() goredis.Pipeliner {
+	return c.client.Pipeline()
+}
+
 func NewClient(cfg Config) (*Client, error) {
 	rdb := goredis.NewClient(&goredis.Options{
 		Addr:         cfg.Addr,

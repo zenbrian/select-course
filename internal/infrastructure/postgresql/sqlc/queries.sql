@@ -106,3 +106,15 @@ WHERE id = $1;
 -- name: DeleteUserCourse :execrows
 DELETE FROM user_courses
 WHERE user_id = $1 AND course_id = $2;
+
+-- name: ListCourses :many
+SELECT
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+FROM courses;

@@ -11,17 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
+	"github.com/zenbrian/select-course/internal/infrastructure/redis"
 )
 
 type Service interface {
 	GetCourseByID(ctx context.Context, id int64) (repo.Course, error)
 	SelectCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
 	BackCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
+	PreheatCoursesToRedis(ctx context.Context) error
 }
 
 type svc struct {
-	repo *repo.Queries
-	db   *pgxpool.Pool
+	repo  *repo.Queries
+	db    *pgxpool.Pool
+	redis *redis.Client
 }
 
 const maxSlots = 32
@@ -35,19 +38,50 @@ var (
 	ErrNotSelected       = errors.New("course not selected")
 )
 
-func NewService(repo *repo.Queries, db *pgxpool.Pool) Service {
+func NewService(repo *repo.Queries, db *pgxpool.Pool, redis *redis.Client) Service {
 	return &svc{
-		repo: repo,
-		db:   db,
+		repo:  repo,
+		db:    db,
+		redis: redis,
 	}
 }
 
-// func (s *svc) CreateCourse(ctx context.Context, course *repo.Course) (repo.Course, error) {
-
-// }
-
 func (s *svc) GetCourseByID(ctx context.Context, id int64) (repo.Course, error) {
 	return s.repo.GetCourseByID(ctx, id)
+}
+
+func (s *svc) PreheatCoursesToRedis(ctx context.Context) error {
+	// 1. 從 MySQL/PostgreSQL 中把課程全部撈出來
+	courses, err := s.repo.ListCourses(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list courses from db: %w", err)
+	}
+
+	// 2. 使用 Pipeline 批次寫入，避免迴圈內一直建立連線
+	pipe := s.redis.Pipeline()
+
+	for _, v := range courses {
+		// 定義你在 Redis 的 Hash Key，例如 "course:info:1"
+		hashKey := fmt.Sprintf("course:info:%d", v.ID)
+
+		// 參考文章的做法，使用 HSet 把欄位一次寫入
+		pipe.HSet(
+			ctx,
+			hashKey,
+			"category_id", v.CategoryID,
+			"duration", v.Duration, // 你的 schema 是 string，HSet 也吃
+			"week", v.Week.Int32, // 你的 Week 是 pgtype.Int4，提取裡面的 Int32
+			"capacity", v.Capacity,
+		)
+	}
+
+	// 3. 一次發送給 Redis
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to execute redis pipeline for preheat: %w", err)
+	}
+
+	return nil
 }
 
 func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (repo.Course, error) {
