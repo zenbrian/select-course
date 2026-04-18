@@ -135,6 +135,37 @@ func (q *Queries) GetCourseByID(ctx context.Context, id int64) (Course, error) {
 	return i, err
 }
 
+const getCourseByIDForUpdate = `-- name: GetCourseByIDForUpdate :one
+SELECT
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+FROM courses
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) GetCourseByIDForUpdate(ctx context.Context, id int64) (Course, error) {
+	row := q.db.QueryRow(ctx, getCourseByIDForUpdate, id)
+	var i Course
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.CategoryID,
+		&i.Week,
+		&i.Duration,
+		&i.Capacity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, username, password, created_at, updated_at, flag
 FROM users
@@ -143,6 +174,27 @@ WHERE id = $1
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Flag,
+	)
+	return i, err
+}
+
+const getUserByIDForUpdate = `-- name: GetUserByIDForUpdate :one
+SELECT id, username, password, created_at, updated_at, flag
+FROM users
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) GetUserByIDForUpdate(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByIDForUpdate, id)
 	var i User
 	err := row.Scan(
 		&i.ID,

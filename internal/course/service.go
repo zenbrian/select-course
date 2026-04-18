@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
@@ -85,58 +86,88 @@ func (s *svc) PreheatCoursesToRedis(ctx context.Context) error {
 }
 
 func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (repo.Course, error) {
+	// ── Redis 預檢：原子扣減 capacity，快速擋掉「已滿」的請求 ──
+	redisKey := fmt.Sprintf("course:info:%d", courseID)
+	redisPreChecked := false
+
+	if s.redis != nil {
+		remaining, err := s.redis.HIncrBy(ctx, redisKey, "capacity", -1)
+		if err != nil {
+			// Redis 異常時不阻擋選課，退化為純 DB 路徑
+			slog.Warn("redis pre-check failed, falling back to DB", "course_id", courseID, "error", err)
+		} else {
+			redisPreChecked = true
+			if remaining < 0 {
+				// 名額已用完，補回 Redis 並直接拒絕
+				s.redis.HIncrBy(ctx, redisKey, "capacity", 1)
+				return repo.Course{}, ErrCourseFull
+			}
+		}
+	}
+
+	// ── 以下為原有 DB Transaction 邏輯 ──
+
 	// 1. 開 transaction
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	qtx := s.repo.WithTx(tx)
 
-	// 2. 鎖 course（避免超賣）
-	course, err := qtx.GetCourseByID(ctx, courseID)
+	// 2. 鎖 course（FOR UPDATE 避免超賣）
+	course, err := qtx.GetCourseByIDForUpdate(ctx, courseID)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 
 	if course.Capacity <= 0 {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, ErrCourseFull
 	}
 
-	// 3. 鎖 user（避免 flag race）
-	user, err := qtx.GetUserByID(ctx, userID)
+	// 3. 鎖 user（FOR UPDATE 避免 flag race）
+	user, err := qtx.GetUserByIDForUpdate(ctx, userID)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 
 	if !course.Week.Valid {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, ErrInvalidCourseWeek
 	}
 
 	// 4. 用 testBit 檢查時間衝突
-
 	durationSlot, err := strconv.Atoi(course.Duration)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, fmt.Errorf("invalid course duration: %w", err)
 	}
 
 	offset := int(course.Week.Int32)*3 + durationSlot
 	if offset < 0 || offset >= maxSlots {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, ErrInvalidTimeSlot
 	}
 
 	occupied, err := testBit(user.Flag, offset)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 	if occupied {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, ErrTimeConflict
 	}
 
 	// 5. 原子扣減課程容量，避免併發下遺失更新
 	courseUpdated, err := qtx.TryDecrementCapacity(ctx, course.ID)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repo.Course{}, ErrCourseFull
 		}
@@ -149,8 +180,10 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 		CourseID: courseID,
 	})
 	if err != nil {
-		// duplicate key
-		if strings.Contains(err.Error(), "duplicate key") {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
+		// unique_violation (SQLSTATE 23505)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return repo.Course{}, ErrAlreadySelected
 		}
 		return repo.Course{}, fmt.Errorf("failed to create user course: %w", err)
@@ -159,6 +192,7 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 	// 7. 用 setBit 更新 user flag
 	newFlag, err := setBit(user.Flag, offset)
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 
@@ -167,11 +201,13 @@ func (s *svc) SelectCourse(ctx context.Context, courseID int64, userID int64) (r
 		Flag: newFlag,
 	})
 	if err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, fmt.Errorf("failed to update user flag: %w", err)
 	}
 
 	// 8. commit
 	if err := tx.Commit(ctx); err != nil {
+		s.redisCompensate(ctx, redisKey, redisPreChecked)
 		return repo.Course{}, err
 	}
 
@@ -187,14 +223,14 @@ func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (rep
 
 	qtx := s.repo.WithTx(tx)
 
-	// 1. 鎖課程
-	course, err := qtx.GetCourseByID(ctx, courseID)
+	// 1. 鎖課程（FOR UPDATE）
+	course, err := qtx.GetCourseByIDForUpdate(ctx, courseID)
 	if err != nil {
 		return repo.Course{}, err
 	}
 
-	// 2. 鎖 user
-	user, err := qtx.GetUserByID(ctx, userID)
+	// 2. 鎖 user（FOR UPDATE）
+	user, err := qtx.GetUserByIDForUpdate(ctx, userID)
 	if err != nil {
 		return repo.Course{}, err
 	}
@@ -216,6 +252,10 @@ func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (rep
 	if err != nil {
 		return repo.Course{}, fmt.Errorf("failed to increment course capacity: %w", err)
 	}
+	if !course.Week.Valid {
+		return repo.Course{}, ErrInvalidCourseWeek
+	}
+
 	durationSlot, err := strconv.Atoi(course.Duration)
 	if err != nil {
 		return repo.Course{}, fmt.Errorf("invalid course duration: %w", err)
@@ -241,9 +281,27 @@ func (s *svc) BackCourse(ctx context.Context, courseID int64, userID int64) (rep
 	if err := tx.Commit(ctx); err != nil {
 		return repo.Course{}, err
 	}
-	//更新用戶選課紀錄()
+
+	// 7. DB commit 成功後，回補 Redis capacity
+	if s.redis != nil {
+		redisKey := fmt.Sprintf("course:info:%d", courseID)
+		if _, err := s.redis.HIncrBy(ctx, redisKey, "capacity", 1); err != nil {
+			slog.Warn("failed to increment redis capacity after back-course", "course_id", courseID, "error", err)
+		}
+	}
+
 	return courseUpdated, nil
 
+}
+
+// redisCompensate 在 DB 操作失敗時，將 Redis 預扣的 capacity 補回來。
+func (s *svc) redisCompensate(ctx context.Context, redisKey string, preChecked bool) {
+	if !preChecked || s.redis == nil {
+		return
+	}
+	if _, err := s.redis.HIncrBy(ctx, redisKey, "capacity", 1); err != nil {
+		slog.Error("failed to compensate redis capacity", "key", redisKey, "error", err)
+	}
 }
 
 func setBit(flag int32, slot int) (int32, error) {

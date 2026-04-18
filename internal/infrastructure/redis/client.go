@@ -95,3 +95,13 @@ func (c *Client) SIsMember(ctx context.Context, key string, member string) (bool
 	}
 	return c.client.SIsMember(ctx, key, member).Result()
 }
+
+// HIncrBy atomically increments a hash field by the given value.
+// Returns the new value after the increment.
+// Use incr = -1 to decrement (e.g. capacity pre-check).
+func (c *Client) HIncrBy(ctx context.Context, key string, field string, incr int64) (int64, error) {
+	if c == nil || c.client == nil {
+		return 0, fmt.Errorf("redis client is nil")
+	}
+	return c.client.HIncrBy(ctx, key, field, incr).Result()
+}

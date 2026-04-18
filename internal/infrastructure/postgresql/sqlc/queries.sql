@@ -31,6 +31,26 @@ SELECT
 FROM courses
 WHERE id = $1;
 
+-- name: GetCourseByIDForUpdate :one
+SELECT
+    id,
+    title,
+    category_id,
+    week,
+    duration,
+    capacity,
+    created_at,
+    updated_at
+FROM courses
+WHERE id = $1
+FOR UPDATE;
+
+-- name: GetUserByIDForUpdate :one
+SELECT id, username, password, created_at, updated_at, flag
+FROM users
+WHERE id = $1
+FOR UPDATE;
+
 -- name: UpdateCourse :one
 UPDATE courses
 SET
