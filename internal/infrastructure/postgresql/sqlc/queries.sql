@@ -138,3 +138,22 @@ SELECT
     created_at,
     updated_at
 FROM courses;
+
+-- name: CreateUser :one
+INSERT INTO users (
+    username,
+    password,
+    flag
+) VALUES (
+    $1, $2, 0
+)
+RETURNING id, username, password, created_at, updated_at, flag;
+
+-- name: GetUserByUsername :one
+SELECT id, username, password, created_at, updated_at, flag
+FROM users
+WHERE username = $1;
+
+-- name: ListUsers :many
+SELECT id, username, password, created_at, updated_at, flag
+FROM users;

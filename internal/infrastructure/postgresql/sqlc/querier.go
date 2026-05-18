@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	CreateCourse(ctx context.Context, arg CreateCourseParams) (Course, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserCourse(ctx context.Context, arg CreateUserCourseParams) error
 	DeleteCourse(ctx context.Context, id int64) error
 	DeleteUserCourse(ctx context.Context, arg DeleteUserCourseParams) (int64, error)
@@ -17,8 +18,10 @@ type Querier interface {
 	GetCourseByIDForUpdate(ctx context.Context, id int64) (Course, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByIDForUpdate(ctx context.Context, id int64) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
 	IncrementCapacity(ctx context.Context, id int64) (Course, error)
 	ListCourses(ctx context.Context) ([]Course, error)
+	ListUsers(ctx context.Context) ([]User, error)
 	TryDecrementCapacity(ctx context.Context, id int64) (Course, error)
 	UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Course, error)
 	UpdateUserFlag(ctx context.Context, arg UpdateUserFlagParams) error

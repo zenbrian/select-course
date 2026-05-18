@@ -12,6 +12,7 @@ import (
 	"github.com/zenbrian/select-course/internal/course"
 	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
 	redisinfra "github.com/zenbrian/select-course/internal/infrastructure/redis"
+	"github.com/zenbrian/select-course/internal/user"
 )
 
 // mount
@@ -35,16 +36,27 @@ func (app *application) mount() http.Handler {
 		w.Write([]byte("OK"))
 	})
 	OrderService := course.NewService(repo.New(app.db), app.db, app.redis)
+	UserService := user.NewService(repo.New(app.db), app.db, app.redis)
 
 	// 在啟動服務之前，先執行預熱
 	if err := OrderService.PreheatCoursesToRedis(context.Background()); err != nil {
 		log.Fatalf("failed to preheat courses to redis: %v", err)
+	}
+	if err := UserService.PreheatUsersToRedis(context.Background()); err != nil {
+		log.Fatalf("failed to preheat users to redis: %v", err)
 	}
 
 	OrderHandler := course.NewHandler(OrderService)
 	r.Get("/courses/{id}", OrderHandler.GetCourse)
 	r.Post("/courses/select", OrderHandler.SelectCourse)
 	r.Post("/courses/back-course", OrderHandler.BackCourse)
+
+	UserHandler := user.NewHandler(UserService)
+	r.Post("/users/register", UserHandler.Register)
+	r.Post("/users/login", UserHandler.Login)
+	r.Post("/users/logout", UserHandler.Logout)
+	r.Get("/users/{id}", UserHandler.GetUser)
+
 	return r
 }
 
