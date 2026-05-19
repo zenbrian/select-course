@@ -115,3 +115,8 @@
 | Ramp-up | **顯著改善** | 大量被拒請求不再佔用 DB 資源 |
 
 所有場景均為 **0 超賣、0 Server Error**，加入 Redis 預檢後資料一致性未受影響。
+
+![alt text](<User Authentication Session-2026-05-19-023043.png>)
+![alt text](<User Authentication Session-2026-05-19-023852.png>)
+![alt text](<User Authentication Session-2026-05-19-024519.png>)
+![alt text](<User Authentication Session-2026-05-19-024605.png>)   

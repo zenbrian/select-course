@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,26 +19,33 @@ type Service interface {
 	Register(ctx context.Context, username, password string) (repo.User, error)
 	Login(ctx context.Context, username, password string) (repo.User, error)
 	GetUserByID(ctx context.Context, id int64) (repo.User, error)
+	CreateSession(ctx context.Context, userID int64) (string, error)
+	GetSessionUser(ctx context.Context, sessionID string) (int64, error)
+	DestroySession(ctx context.Context, sessionID string) error
 	PreheatUsersToRedis(ctx context.Context) error
 }
 
 type svc struct {
-	repo  *repo.Queries
-	db    *pgxpool.Pool
-	redis *redis.Client
+	repo       *repo.Queries
+	db         *pgxpool.Pool
+	redis      *redis.Client
+	sessions   map[string]int64
+	sessionsMu sync.RWMutex
 }
 
 var (
-	ErrUserNotFound  = errors.New("user not found")
-	ErrWrongPassword = errors.New("invalid password")
-	ErrUsernameTaken = errors.New("username already exists")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrWrongPassword   = errors.New("invalid password")
+	ErrUsernameTaken   = errors.New("username already exists")
+	ErrSessionNotFound = errors.New("session not found")
 )
 
 func NewService(repo *repo.Queries, db *pgxpool.Pool, redis *redis.Client) Service {
 	return &svc{
-		repo:  repo,
-		db:    db,
-		redis: redis,
+		repo:     repo,
+		db:       db,
+		redis:    redis,
+		sessions: make(map[string]int64),
 	}
 }
 
@@ -80,6 +89,49 @@ func (s *svc) GetUserByID(ctx context.Context, id int64) (repo.User, error) {
 		return repo.User{}, fmt.Errorf("failed to get user by id: %w", err)
 	}
 	return user, nil
+}
+
+func (s *svc) CreateSession(ctx context.Context, userID int64) (string, error) {
+	_ = ctx
+	if userID <= 0 {
+		return "", ErrUserNotFound
+	}
+
+	sessionID := uuid.NewString()
+	s.sessionsMu.Lock()
+	s.sessions[sessionID] = userID
+	s.sessionsMu.Unlock()
+
+	return sessionID, nil
+}
+
+func (s *svc) GetSessionUser(ctx context.Context, sessionID string) (int64, error) {
+	_ = ctx
+	if sessionID == "" {
+		return 0, ErrSessionNotFound
+	}
+
+	s.sessionsMu.RLock()
+	userID, ok := s.sessions[sessionID]
+	s.sessionsMu.RUnlock()
+	if !ok {
+		return 0, ErrSessionNotFound
+	}
+
+	return userID, nil
+}
+
+func (s *svc) DestroySession(ctx context.Context, sessionID string) error {
+	_ = ctx
+	if sessionID == "" {
+		return nil
+	}
+
+	s.sessionsMu.Lock()
+	delete(s.sessions, sessionID)
+	s.sessionsMu.Unlock()
+
+	return nil
 }
 
 func (s *svc) PreheatUsersToRedis(ctx context.Context) error {

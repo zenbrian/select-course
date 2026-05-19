@@ -9,11 +9,15 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/jackc/pgx/v5"
-	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
+	"github.com/zenbrian/select-course/internal/user"
 )
 
 type handler struct {
 	service Service
+}
+
+type courseActionRequest struct {
+	CourseID int64 `json:"course_id"`
 }
 
 func NewHandler(service Service) *handler {
@@ -41,18 +45,24 @@ func (h *handler) GetCourse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) SelectCourse(w http.ResponseWriter, r *http.Request) {
-	var body repo.CreateUserCourseParams
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID <= 0 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body courseActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
-	if body.UserID <= 0 || body.CourseID <= 0 {
-		http.Error(w, "user_id and course_id must be > 0", http.StatusBadRequest)
+	if body.CourseID <= 0 {
+		http.Error(w, "course_id must be > 0", http.StatusBadRequest)
 		return
 	}
-	if course, err := h.service.SelectCourse(r.Context(), body.CourseID, body.UserID); err != nil {
+	if course, err := h.service.SelectCourse(r.Context(), body.CourseID, userID); err != nil {
 		status, msg := mapCourseError(err)
-		logCourseError("select", body.UserID, body.CourseID, err, status)
+		logCourseError("select", userID, body.CourseID, err, status)
 		http.Error(w, msg, status)
 		return
 	} else {
@@ -63,18 +73,24 @@ func (h *handler) SelectCourse(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *handler) BackCourse(w http.ResponseWriter, r *http.Request) {
-	var body repo.DeleteUserCourseParams
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID <= 0 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body courseActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
-	if body.UserID <= 0 || body.CourseID <= 0 {
-		http.Error(w, "user_id and course_id must be > 0", http.StatusBadRequest)
+	if body.CourseID <= 0 {
+		http.Error(w, "course_id must be > 0", http.StatusBadRequest)
 		return
 	}
-	if course, err := h.service.BackCourse(r.Context(), body.CourseID, body.UserID); err != nil {
+	if course, err := h.service.BackCourse(r.Context(), body.CourseID, userID); err != nil {
 		status, msg := mapCourseError(err)
-		logCourseError("back", body.UserID, body.CourseID, err, status)
+		logCourseError("back", userID, body.CourseID, err, status)
 		http.Error(w, msg, status)
 		return
 	} else {

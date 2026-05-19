@@ -48,13 +48,21 @@ func (app *application) mount() http.Handler {
 
 	OrderHandler := course.NewHandler(OrderService)
 	r.Get("/courses/{id}", OrderHandler.GetCourse)
-	r.Post("/courses/select", OrderHandler.SelectCourse)
-	r.Post("/courses/back-course", OrderHandler.BackCourse)
 
 	UserHandler := user.NewHandler(UserService)
+	authMiddleware := user.AuthMiddleware(UserService)
+
 	r.Post("/users/register", UserHandler.Register)
 	r.Post("/users/login", UserHandler.Login)
-	r.Post("/users/logout", UserHandler.Logout)
+
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware)
+		r.Post("/users/logout", UserHandler.Logout)
+		r.Get("/users/me", UserHandler.GetMe)
+		r.Post("/courses/select", OrderHandler.SelectCourse)
+		r.Post("/courses/back-course", OrderHandler.BackCourse)
+	})
+
 	r.Get("/users/{id}", UserHandler.GetUser)
 
 	return r
