@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/jackc/pgx/v5"
+	repo "github.com/zenbrian/select-course/internal/infrastructure/postgresql/sqlc"
 	"github.com/zenbrian/select-course/internal/user"
 )
 
@@ -126,8 +127,42 @@ func logCourseError(action string, userID int64, courseID int64, err error, stat
 	slog.Warn("course operation rejected", "action", action, "user_id", userID, "course_id", courseID, "status", status, "error", err)
 }
 
-// func (h *handler) CreateCourse(w http.ResponseWriter, r *http.Request) {}
+func (h *handler) ListCourses(w http.ResponseWriter, r *http.Request) {
+	courses, err := h.service.ListCourses(r.Context())
+	if err != nil {
+		slog.Error("failed to list courses", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if courses == nil {
+		courses = []repo.Course{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(courses); err != nil {
+		slog.Error("failed to encode courses response", "error", err)
+		return
+	}
+}
 
-// func (h *handler) UpdateCourse(w http.ResponseWriter, r *http.Request) {}
+func (h *handler) GetUserCourses(w http.ResponseWriter, r *http.Request) {
+	userID, ok := user.UserIDFromContext(r.Context())
+	if !ok || userID <= 0 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-// func (h *handler) DeleteCourse(w http.ResponseWriter, r *http.Request) {}
+	courses, err := h.service.GetCoursesByUserID(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user courses", "user_id", userID, "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if courses == nil {
+		courses = []repo.Course{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(courses); err != nil {
+		slog.Error("failed to encode user courses response", "error", err)
+		return
+	}
+}

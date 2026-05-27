@@ -157,3 +157,9 @@ WHERE username = $1;
 -- name: ListUsers :many
 SELECT id, username, password, created_at, updated_at, flag
 FROM users;
+
+-- name: GetCoursesByUserID :many
+SELECT c.id, c.title, c.category_id, c.week, c.duration, c.capacity, c.created_at, c.updated_at
+FROM courses c
+JOIN user_courses uc ON c.id = uc.course_id
+WHERE uc.user_id = $1;

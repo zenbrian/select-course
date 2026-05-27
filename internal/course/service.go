@@ -17,6 +17,8 @@ import (
 
 type Service interface {
 	GetCourseByID(ctx context.Context, id int64) (repo.Course, error)
+	ListCourses(ctx context.Context) ([]repo.Course, error)
+	GetCoursesByUserID(ctx context.Context, userID int64) ([]repo.Course, error)
 	SelectCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
 	BackCourse(ctx context.Context, course_id int64, user_id int64) (repo.Course, error)
 	PreheatCoursesToRedis(ctx context.Context) error
@@ -49,6 +51,14 @@ func NewService(repo *repo.Queries, db *pgxpool.Pool, redis *redis.Client) Servi
 
 func (s *svc) GetCourseByID(ctx context.Context, id int64) (repo.Course, error) {
 	return s.repo.GetCourseByID(ctx, id)
+}
+
+func (s *svc) ListCourses(ctx context.Context) ([]repo.Course, error) {
+	return s.repo.ListCourses(ctx)
+}
+
+func (s *svc) GetCoursesByUserID(ctx context.Context, userID int64) ([]repo.Course, error) {
+	return s.repo.GetCoursesByUserID(ctx, userID)
 }
 
 func (s *svc) PreheatCoursesToRedis(ctx context.Context) error {

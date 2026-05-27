@@ -16,6 +16,7 @@ type Querier interface {
 	DeleteUserCourse(ctx context.Context, arg DeleteUserCourseParams) (int64, error)
 	GetCourseByID(ctx context.Context, id int64) (Course, error)
 	GetCourseByIDForUpdate(ctx context.Context, id int64) (Course, error)
+	GetCoursesByUserID(ctx context.Context, userID int64) ([]Course, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByIDForUpdate(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)

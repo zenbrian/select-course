@@ -48,6 +48,7 @@ func (app *application) mount() http.Handler {
 
 	OrderHandler := course.NewHandler(OrderService)
 	r.Get("/courses/{id}", OrderHandler.GetCourse)
+	r.Get("/courses", OrderHandler.ListCourses)
 
 	UserHandler := user.NewHandler(UserService)
 	authMiddleware := user.AuthMiddleware(UserService)
@@ -58,7 +59,8 @@ func (app *application) mount() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware)
 		r.Post("/users/logout", UserHandler.Logout)
-		r.Get("/users/me", UserHandler.GetMe)
+		r.Get("/users/index", UserHandler.GetMe)
+		r.Get("/users/index/courses", OrderHandler.GetUserCourses)
 		r.Post("/courses/select", OrderHandler.SelectCourse)
 		r.Post("/courses/back-course", OrderHandler.BackCourse)
 	})

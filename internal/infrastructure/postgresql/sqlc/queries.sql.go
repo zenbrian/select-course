@@ -196,6 +196,42 @@ func (q *Queries) GetCourseByIDForUpdate(ctx context.Context, id int64) (Course,
 	return i, err
 }
 
+const getCoursesByUserID = `-- name: GetCoursesByUserID :many
+SELECT c.id, c.title, c.category_id, c.week, c.duration, c.capacity, c.created_at, c.updated_at
+FROM courses c
+JOIN user_courses uc ON c.id = uc.course_id
+WHERE uc.user_id = $1
+`
+
+func (q *Queries) GetCoursesByUserID(ctx context.Context, userID int64) ([]Course, error) {
+	rows, err := q.db.Query(ctx, getCoursesByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Course
+	for rows.Next() {
+		var i Course
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.CategoryID,
+			&i.Week,
+			&i.Duration,
+			&i.Capacity,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, username, password, created_at, updated_at, flag
 FROM users
