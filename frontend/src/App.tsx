@@ -30,7 +30,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -120,8 +119,12 @@ function App() {
   }
 
   const refreshUser = async () => {
-    const me = await getUserIndex()
-    setUser(me)
+    try {
+      const me = await getUserIndex()
+      setUser(me)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '同步使用者資料失敗')
+    }
   }
 
   const handleSelectCourse = async (courseId: number) => {
@@ -233,8 +236,8 @@ function App() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
-      <header className="flex flex-col gap-4 border bg-card shadow-sm rounded-xl lg:flex-row lg:items-center lg:justify-between" style={{ padding: '14px 11px 14px 20px' }}>
+    <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-4 md:p-6">
+      <header className="flex flex-col gap-4 rounded-xl border bg-card shadow-sm lg:flex-row lg:items-center lg:justify-between" style={{ padding: '16px 20px' }}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <BookOpen className="h-5 w-5" />
@@ -246,7 +249,7 @@ function App() {
         </div>
 
         <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-          <div className="flex min-w-0 items-center gap-4" style={{ paddingRight: '10px' }}>
+          <div className="flex min-w-0 items-center gap-4 pr-3">
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">使用者</p>
               <p className="max-w-[160px] truncate text-sm font-semibold leading-5">{user.username}</p>
@@ -287,9 +290,9 @@ function App() {
       </div>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_480px]">
-        <Card className={cn('shadow-none rounded-xl', activeTab === 'catalog' ? 'block' : 'hidden lg:block')}>
-          <CardHeader className="border-b" style={{ padding: '18px 20px' }}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between" style={{ padding: '2px 0' }}>
+        <Card className={cn('shadow-none rounded-xl gap-0 py-0', activeTab === 'catalog' ? 'block' : 'hidden lg:block')}>
+          <CardHeader className="border-b" style={{ padding: '20px' }}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-xl">課程清單</CardTitle>
                 <CardDescription>用關鍵字或分類縮小範圍，系統會標示已選、額滿與衝堂狀態。</CardDescription>
@@ -298,7 +301,7 @@ function App() {
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-4" style={{ padding: '18px 20px 20px' }}>
+          <CardContent className="space-y-4" style={{ padding: '20px' }}>
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]" style={{ paddingBottom: '12px' }}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -307,7 +310,7 @@ function App() {
                   placeholder="搜尋課程名稱或課程編號"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  className="pl-9 rounded-lg"
+                  className="rounded-lg"
                   style={{ paddingLeft: '36px', paddingRight: '12px' }}
                 />
               </div>
@@ -326,7 +329,7 @@ function App() {
               </Select>
             </div>
 
-            <div className="grid max-h-[calc(100vh-310px)] min-h-[360px] grid-cols-1 gap-4 overflow-y-auto pr-2 xl:grid-cols-2">
+            <div className="grid max-h-[calc(100vh-310px)] min-h-[360px] grid-cols-1 gap-4 overflow-y-auto p-2 xl:grid-cols-2">
               {filteredCourses.length === 0 ? (
                 <div className="flex min-h-[260px] items-center justify-center border border-dashed p-8 text-center text-sm text-muted-foreground xl:col-span-2">
                   找不到符合條件的課程。
@@ -351,9 +354,9 @@ function App() {
         </Card>
 
         <aside className={cn('space-y-6', activeTab === 'schedule' ? 'block' : 'hidden lg:block')}>
-          <Card className="shadow-none rounded-xl">
-            <CardHeader className="border-b" style={{ padding: '18px 20px' }}>
-              <div className="flex items-center justify-between gap-3" style={{ padding: '2px 0' }}>
+          <Card className="shadow-none rounded-xl gap-0 py-0">
+            <CardHeader className="border-b" style={{ padding: '20px' }}>
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-xl">我的課表</CardTitle>
                   <CardDescription>已選課程會固定在對應時段。</CardDescription>
@@ -361,16 +364,16 @@ function App() {
                 <Badge variant="secondary">{userCourses.length} 門</Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5" style={{ padding: '18px 20px 20px' }}>
+            <CardContent className="space-y-5" style={{ padding: '20px' }}>
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">課表密度</span>
-                  <span className="font-medium">{Math.round(scheduleProgress)}%</span>
+                  <span className="font-medium ">{Math.round(scheduleProgress)}%</span>
                 </div>
-                <Progress value={scheduleProgress} className="h-2" />
+                <Progress value={scheduleProgress} className="h-2 padding-2" />
               </div>
 
-              <div className="overflow-hidden border bg-background">
+              <div className="overflow-hidden rounded-xl border bg-background">
                 <Table className="table-fixed">
                   <TableHeader className="bg-muted/60">
                     <TableRow>
@@ -427,15 +430,15 @@ function App() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-none rounded-xl">
-            <CardHeader className="border-b" style={{ padding: '5px 5px 5px 20px' }}>
+          <Card className="shadow-none rounded-xl gap-0 py-0">
+            <CardHeader className="border-b" style={{ padding: '14px 20px' }}>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Info className="h-4 w-4" />
                 選課狀態說明
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1 text-sm text-muted-foreground" style={{ padding: 0 }}>
-              <p style={{ padding: '10px 10px 10px 20px' }}>「衝堂」表示該課程與已選課程落在相同星期與時段，系統會停用選課按鈕。容量為 0 時會標示額滿；退選後會重新載入課程與課表資料。</p>
+            <CardContent className="text-sm text-muted-foreground" style={{ padding: '16px 20px' }}>
+              <p>「衝堂」表示該課程與已選課程落在相同星期與時段，系統會停用選課按鈕。容量為 0 時會標示額滿；退選後會重新載入課程與課表資料。</p>
             </CardContent>
           </Card>
         </aside>
@@ -456,10 +459,11 @@ function StatusMessage({ error, success, floating = false }: StatusMessageProps)
   return (
     <div
       className={cn(
-        'flex items-center gap-2 border p-3 text-sm shadow-sm',
+        'flex items-center gap-2 rounded-lg border text-sm shadow-sm',
         floating && 'shadow-lg',
         error ? 'border-destructive/30 bg-destructive text-destructive-foreground' : 'border-emerald-600/20 bg-emerald-600 text-white',
       )}
+      style={{ padding: '12px 16px' }}
     >
       {error ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
       <span className="font-medium">{error || success}</span>
@@ -477,7 +481,7 @@ function MetricCard({ icon: Icon, label, value }: MetricCardProps) {
   return (
     <div className="border bg-card shadow-none rounded-xl" style={{ padding: '16px 18px' }}>
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0" style={{ padding: '1px 0' }}>
+        <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
         </div>
@@ -513,41 +517,44 @@ function CourseCard({
   const full = course.capacity <= 0
 
   return (
-    <Card className={cn('flex flex-col overflow-hidden shadow-none transition-colors hover:bg-muted/20 rounded-xl', enrolled && 'border-primary bg-primary/[0.03]', conflicted && 'opacity-75')}>
-      <CardHeader className="space-y-2" style={{ padding: '16px 16px 8px' }}>
-        <div className="flex items-start justify-between gap-3" style={{ padding: '1px 0' }}>
-          <div className="min-w-0 space-y-1">
-            <p className="text-xs text-muted-foreground">課程 #{course.id}</p>
-            <CardTitle className="line-clamp-2 text-base leading-snug">{course.title}</CardTitle>
-          </div>
-          <Badge variant={enrolled ? 'default' : 'secondary'} className="shrink-0">
-            分類 {course.category_id}
-          </Badge>
+    <div
+      className={cn(
+        'flex flex-col rounded-xl bg-card text-sm text-card-foreground ring-1 ring-foreground/10 transition-colors hover:bg-muted/20',
+        enrolled && 'ring-primary bg-primary/[0.03]',
+        conflicted && 'opacity-75',
+      )}
+      style={{ padding: '16px' }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs text-muted-foreground">課程 #{course.id}</p>
+          <p className="line-clamp-2 text-base font-medium leading-snug">{course.title}</p>
         </div>
-      </CardHeader>
+        <Badge variant={enrolled ? 'default' : 'secondary'} className="shrink-0">
+          分類 {course.category_id}
+        </Badge>
+      </div>
 
-      <CardContent className="space-y-3" style={{ padding: '0 16px 12px' }}>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>{getWeekText(course)}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5" />
-            <span>{getSectionText(course)}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            <span>
-              剩餘名額 <strong className="text-foreground">{course.capacity}</strong>
-            </span>
-          </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" style={{ marginTop: '12px' }}>
+        <div className="flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5" />
+          <span>{getWeekText(course)}</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <Clock3 className="h-3.5 w-3.5" />
+          <span>{getSectionText(course)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" />
+          <span>
+            剩餘名額 <strong className="text-foreground">{course.capacity}</strong>
+          </span>
+        </div>
+      </div>
 
-        {full && <p className="text-xs font-medium text-destructive">此課程目前額滿</p>}
-      </CardContent>
+      {full && <p className="text-xs font-medium text-destructive" style={{ marginTop: '8px' }}>此課程目前額滿</p>}
 
-      <CardFooter style={{ padding: '0 16px 16px' }}>
+      <div style={{ marginTop: '14px' }}>
         {enrolled ? (
           <Button size="sm" variant="outline" className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={pending} onClick={() => void onBack(course.id)}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -567,8 +574,8 @@ function CourseCard({
             {pending ? '選課中' : '加入課表'}
           </Button>
         )}
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   )
 }
 
